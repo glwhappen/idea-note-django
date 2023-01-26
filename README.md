@@ -24,3 +24,6 @@ python manage.py migrate
 创建超级用户：python manage.py createsuperuser
 
 运行测试：python manage.py test polls
+
+
+R2: 添加django-ninja框架
