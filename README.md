@@ -12,6 +12,7 @@ TIME_ZONE = "Asia/Shanghai"
 迁移数据库：python manage.py migrate
 
 数据库生成：python manage.py makemigrations polls
+python manage.py makemigrations noteapi
 
 查看建表语句：python manage.py sqlmigrate polls 0001
 
@@ -27,3 +28,8 @@ python manage.py migrate
 
 
 R2: 添加django-ninja框架
+
+R3
+1. 增加内容md5验证，防止多地编辑产生冲突
+2. 添加文章排序功能
+3. 添加文章公开功能

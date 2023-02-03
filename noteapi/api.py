@@ -8,35 +8,45 @@ from ninja.security import HttpBearer
 
 from noteapi.jwt import JwtUtils
 from noteapi.models import Note
+import hashlib
 
 
 class UserLoginSchema(Schema):
     username: str
     password: str
 
+
 class UserRegisterSchema(Schema):
     username: str
     password: str
     email: str
 
+
 class NoteInSchema(Schema):
     id: str = "V1StGXR8_Z5jdHi6B-myT"
     content: str = "\n\n\n\n"
+    lastContentMd5: str = ""
     background: str = "#ffffff"
     color: str = "#333333"
     state: int = 0
+    public: bool = False
+    top: int = 0
     secret: bool = False
     type: str = "note"
     createAt: str = "2023-01-24 06:13:00"
     updateAt: str = "2023-01-24 06:13:00"
 
+
 class NoteOutSchema(Schema):
     id: str = "V1StGXR8_Z5jdHi6B-myT"
     content: str = "\n\n\n\n"
+    contentMd5: str = ""
     background: str = "#ffffff"
     color: str = "#333333"
     state: int = 0
     secret: bool = False
+    public: bool = False
+    top: int = 0
     type: str = "note"
     author: str = ""
     createAt: str = "2023-01-24 06:13:00"
@@ -74,10 +84,10 @@ class AuthBearer(HttpBearer):
             return True
 
 
-
 @api.get("/add", tags=["test"])
 def add(request, a: int, b: int):
     return {"result": a + b}
+
 
 @api.get("/hello", tags=["test"])
 def hello(request):
@@ -91,8 +101,8 @@ def index(request, search: str = "", state: int = 0):
     # user = User.objects.get(username=username)
     search_list = search.split(" ")
 
-
-    notes = Note.objects.filter(author=username, content__icontains=search_list[0], state=state).order_by('-createAt')
+    notes = Note.objects.filter(author=username, content__icontains=search_list[0], state=state).\
+        order_by('-top', '-createAt')
     for search_content in search_list:
         notes = notes.filter(content__icontains=search_content)
 
@@ -108,17 +118,50 @@ def index(request, search: str = "", state: int = 0):
 
 @api.post("/note", auth=AuthBearer(), response=Result, tags=["note"], summary="添加笔记")
 def create(request, note: NoteInSchema):
+
     user_info = get_user_info_from_token(request)
-    note = Note(**note.dict(), author=user_info.get("username"))
-    note.save()
-    return {
-        "code": 200,
-        "msg": "笔记添加成功",
-        "data": {
-            "note": NoteOutSchema.from_orm(note)
+    id = note.id
+    last_content_md5 = note.lastContentMd5
+    del note.lastContentMd5
+    old_note = Note.objects.filter(id=id).first()
+
+    print(old_note)
+
+    # 计算note.content的md5值
+
+    m = hashlib.md5()
+    m.update(note.content.encode("utf-8"))
+    md5 = m.hexdigest()
+
+    if old_note:
+        # 更新
+        if user_info.get('username') != old_note.author:
+            return Result(code=401, message="无权限")
+
+        if last_content_md5 != '' and old_note.contentMd5 != '' and last_content_md5 != old_note.contentMd5:
+            return Result(code=402, message="内容已被修改，保存时产生了冲突，请复制笔记内容并刷新后再试")
+
+        note = Note(**note.dict(), contentMd5=md5, author=user_info.get("username"))
+        note.save()
+        return {
+            "code": 200,
+            "message": "笔记更新成功",
+            "data": {
+                "note": NoteOutSchema.from_orm(note)
+            }
+        }
+    else:
+        # 新增
+        note = Note(**note.dict(), contentMd5=md5, author=user_info.get("username"))
+        note.save()
+        return {
+            "code": 200,
+            "message": "笔记添加成功",
+            "data": {
+                "note": NoteOutSchema.from_orm(note)
+            }
         }
 
-    }
 
 @api.delete("/note/{id}", auth=AuthBearer(), response=Result, tags=["note"], summary="删除笔记")
 def remove(request, id: str):
